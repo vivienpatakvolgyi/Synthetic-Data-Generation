@@ -13,7 +13,7 @@ import imgtransform as imgt
 
 dir_in = 'out/result'
 dir_out = 'mosaic'
-MOSAIC_NR = 5000
+MOSAIC_NR = 5
 CELL_NR_MIN = 1
 CELL_RANGE = 500
 size = (512, 512) #size = (1936, 1456)
@@ -39,7 +39,7 @@ def createMosaic(id, count, dirpath):
         location_img = (location_dot[0] - int(img.size[0] / 2), location_dot[1] - int(img.size[1] / 2))
         bg_mosaic.paste(img, location_img, img)
         bg_dot.paste(imgt.dotAnnot(), location_dot)
-        # print(f'\rGenerating cells: {cellcnt}/{count}', end=' ')
+        print(f'\rGenerating cells: {cellcnt}/{count}', end=' ')
     bg_mosaic = imgt.imgBlur(bg_mosaic)
     bg_mosaic.save(f'{dirpath}/img/{imgcnt}_{id:05d}_{cellcnt+1:05d}_img.png')
     bg_dot.save((f'{dirpath}/dot/{imgcnt}_{id:05d}_{cellcnt+1:05d}_dot.png'))
@@ -89,11 +89,29 @@ def getNewImage(count, path=''):
 
 
 def main():
+    # %%
+    if not os.path.exists('lum_crop/rot/'):
+        os.mkdir('lum_crop/rot/')
+        imgt.dcgan_prep()
+
+    if not os.path.exists('out/gen.model'):
+        DCGAN.trainModels()
+
     dir_path = createMosaicFolder()
     start = datetime.datetime.now()
+
     with open(f'{dir_path}/label.csv', "a") as myfile:
         myfile.write(f"id,count\n")
     futures = []
+
+ 
+    for x in range(int(MOSAIC_NR)):
+        y = random.randint(1, CELL_RANGE) + CELL_NR_MIN
+        createMosaic(x+1, y, dir_path)
+        with open(f'{dir_path}/label.csv', "a") as myfile:
+            myfile.write(f"{x},{y}\n")
+
+    '''    
     with ProcessPoolExecutor() as pool:
         for x in range(int(MOSAIC_NR)):
             y = random.randint(1, CELL_RANGE) + CELL_NR_MIN
@@ -101,6 +119,8 @@ def main():
             time.sleep(1)
             with open(f'{dir_path}/label.csv', "a") as myfile:
                 myfile.write(f"{x},{y}\n")
+    '''
+
     imgt.createNpy(dir_path)
     end = datetime.datetime.now()
     print(f'\r{start} - {end}')

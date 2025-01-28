@@ -5,20 +5,23 @@ from PIL import Image, ImageFilter
 from PIL.Image import Resampling
 
 
-def imgRotate(img, path='', rotate=0):
+def imgRotate(img, path='', rotate=0, name=''):
+    if not os.path.exists(path + '/rot'):
+        os.mkdir(path + '/rot')
     if rotate == 0:
         for x in range(4):
             img = img.rotate(rotate)
             rotate = rotate + 90
             if path != '':
-                img.save(f'{path}_{rotate}.png')
+                #print(f'{path}/{name}_{rotate}.png')
+                img.save(f'{path}/rot/{name}_{rotate}.png')
             else:
                 return img
     else:
         img = img.rotate(rotate)
         img = img.convert('RGB')
         if path != '':
-            img.save(f'{path}_rotate{rotate}.png')
+            img.save(f'{path}/rot/{name}_{rotate}.png')
         else:
             return img
 
@@ -37,7 +40,7 @@ def imgFlip(img, path='', flip='V'):
             print('At least an axis or a save path needed')
 
     if path != '':
-        img.save(f'{path}_flip{flip}.png')
+        img.save(f'{path}/_flip{flip}.png')
     else:
         return img
 
@@ -112,9 +115,12 @@ def openImg(path):
 
 def openDir(dir_path):
     img_array = []
+    img_names = []
     for filename in os.listdir(dir_path):
-        img_array.append(openImg(dir_path + '/' + filename))
-    return img_array
+        if ".png" in filename:
+            img_array.append(openImg(dir_path + '/' + filename))        
+            img_names.append(filename)
+    return img_array,img_names
 
 
 def checkImage(img, min=80000, max=250000):
@@ -165,8 +171,12 @@ def dotAnnot(size=1):
 # ----------------------------------------------------------------------------------------------------------------------
 
 def dcgan_prep():
-    images = openDir('lum_crop')
-    for image in images:
-        imgRotate(img=image, path='lum_crop_rot')
-        imgFlip(img=image, path='lum_crop_rot')
+    print('DCGAN preparation')
+    images, names = openDir('lum_crop')
+    for x, image in enumerate(images):
+        imgv=imgFlip(img=image, flip='V') 
+        imgh=imgFlip(img=image, flip='H')
+        imgRotate(img=image, path='lum_crop', name=names[x].split('.')[0])
+        imgRotate(img=imgv, path='lum_crop', name=names[x].split('.')[0]+'_V')
+        imgRotate(img=imgh, path='lum_crop', name=names[x].split('.')[0]+'_H') 
 

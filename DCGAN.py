@@ -15,22 +15,27 @@ import torchvision.utils as vutils
 from matplotlib import pyplot as plt
 from torch.utils.data import DataLoader
 from torchvision.utils import make_grid
-
+import imgtransform as imgt
 import misc
 
+
+
+
 # %%
-#print('CUDA enabled: ' + str(torch.cuda.is_available()))
+print('CUDA enabled: ' + str(torch.cuda.is_available()))
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+if torch.cuda.is_available():   
+    torch.cuda.empty_cache()
 CHANNELS_IMG = 3
 Z_DIM = 100
-FEATURES_GEN = 92
 LEARNING_RATE_G = 2e-4  # could also use two lrs, one for gen and one for disc
 LEARNING_RATE_D = 2e-5  # could also use two lrs, one for gen and one for disc
-BATCH_SIZE = 512
+BATCH_SIZE = 1024
 IMAGE_SIZE = 64
-NUM_EPOCHS = 31
 FEATURES_DISC = 92
+FEATURES_GEN = 92
 LOSS_THRESHOLD = 0.7
+MIN_NUM_EPOCHS = 10
 
 # %%
 transform = transforms.Compose([
@@ -39,23 +44,24 @@ transform = transforms.Compose([
     transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
 ])
 
-dataset = datasets.ImageFolder('./lum_crop_rot', transform=transform)
+dataset = datasets.ImageFolder('./lum_crop/', transform=transform)
 dataloader = DataLoader(dataset=dataset, batch_size=BATCH_SIZE, shuffle=False)
 
 # %%
 real_batch = next(iter(dataloader))
+
+''' EZ NEM KELL HA NINCS UI
 plt.figure(figsize=(3, 3))
 plt.axis("off")
 plt.imshow(
     np.transpose(vutils.make_grid(real_batch[0].to(device)[:128], padding=2, normalize=True, nrow=12).cpu(), (1, 2, 0)))
+'''
 
-
-# >> uncomment if img preparation needed
-# imgt.dcgan_prep()
 
 # ----------------------------------------------------------------------------------------------------------------------
 
 def deleteOutFolder(path):
+    print(f'Deleting folder: {path}')
     for filename in os.listdir(path):
         file_path = os.path.join(path, filename)
         try:
@@ -69,6 +75,7 @@ def deleteOutFolder(path):
 
 # %%
 def initialize_weights(model):
+    print('Initialize weights')
     classname = model.__class__.__name__
     if classname.find('Conv') != -1:
         nn.init.normal_(model.weight.data, 0.0, 0.02)
@@ -79,16 +86,19 @@ def initialize_weights(model):
 
 # %%
 def show_tensor_images(type, img, epoch, image_tensor, num_images=6, size=(1, 64, 64)):
+    if not os.path.exists('out/img/'):
+        os.mkdir('out/img/')
     image_tensor = (image_tensor + 1) / 2
     image_unflat = image_tensor.detach().cpu()
     image_grid = make_grid(image_unflat[:num_images], padding=2, normalize=True, nrow=6)
     plt.title("Epoch: " + str(epoch) + ' Image: ' + str(img) + ' - (' + type + ')')
     plt.imshow(image_grid.permute(1, 2, 0).squeeze())
     # plt.show()
-    plt.savefig('out\img' + str(img) + '_epoch' + str(epoch) + '_' + type + '.png')
+    plt.savefig('out/img/' + str(img) + '_epoch' + str(epoch) + '_' + type + '.png')
 
 
 def trainModels():
+    print('DCGAN training START')
     fixed_noise = torch.randn(512, Z_DIM, 1, 1).to(device)
     deleteOutFolder('out')
     gen.train()
@@ -96,8 +106,10 @@ def trainModels():
     epoch = 0
     loss_diff = []
     log = ""
-    while epoch < 5 or misc.avg(loss_diff[-5:]) > LOSS_THRESHOLD:
-        dirname = 'out\\result'
+    while epoch < MIN_NUM_EPOCHS or misc.avg(loss_diff[-5:]) > LOSS_THRESHOLD:
+        dirname = 'out/result'
+        if not os.path.exists(dirname):
+            os.mkdir(dirname)
         for batch_idx, (real, _) in enumerate(dataloader):
             real = real.to(device)
             ### create noise tensor
@@ -131,33 +143,34 @@ def trainModels():
 
                 with torch.no_grad():
                     fake = gen(fixed_noise)
-                    if epoch >= 5 and misc.avg(loss_diff[-5:]) < LOSS_THRESHOLD:
-                        os.mkdir(dirname)
+                    if epoch >= MIN_NUM_EPOCHS and misc.avg(loss_diff[-5:]) < LOSS_THRESHOLD:
+                        if not os.path.exists('out/result'):
+                            os.mkdir(dirname)
                         for imx in range(len(fake)):
                             torchvision.utils.save_image(fake[imx],
-                                                         dirname + '\\' + str(epoch) + '_' + str(imx) + '.png')
-
-                    for x in range(5):
+                                                         dirname + '/' + str(epoch) + '_' + str(imx) + '.png')
+                    
+                    for x in range(MIN_NUM_EPOCHS):
                         y = (x + 1) * 12
                         img_grid_real = torchvision.utils.make_grid(real[y], normalize=True)
                         img_grid_fake = torchvision.utils.make_grid(fake[y], normalize=True)
                         show_tensor_images('real', x, 'x', img_grid_real)
+                        show_tensor_images('fake', x, 'y', img_grid_fake)
                         show_tensor_images('fake', x, epoch, img_grid_fake)
+                    
         epoch += 1
-    with open("out\log.txt", "w") as text_file:
+    with open("out/log.txt", "w") as text_file:
         text_file.write(log)
-    torch.save(gen.state_dict(), 'out\gen.model')
-    torch.save(disc.state_dict(), 'out\disc.model')
-
+    torch.save(gen.state_dict(), 'out/gen.model')
+    torch.save(disc.state_dict(), 'out/disc.model')    
+    print('DCGAN training END')
 
 def useModels(count):
     # dirname = 'tmp'
     # deleteOutFolder(dirname)
     arr = []
-    if not os.path.exists('out\gen.model'):
-        trainModels()
 
-    gen.load_state_dict(torch.load('out\gen.model'))
+    gen.load_state_dict(torch.load('out/gen.model', weights_only=True))
     gen.train(False)
 
     fixed_noise = torch.randn(max(1, min(512, count)), Z_DIM, 1, 1).to(device)

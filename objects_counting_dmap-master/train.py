@@ -11,19 +11,22 @@ from model import UNet, FCRN_A
 import get_data
 import misc
 
-RESULT_THRESHOLD = 0.01
+RESULT_THRESHOLD = 0.001
+PLATEAU_THRESHOLD = 50
+TRAIN_FOLDER = '../mosaic/mosaic_002/img'
 
 def train(network_architecture='UNet',
-          learning_rate=1e-2,
-          batch_size=18,
-          horizontal_flip=0.0,
-          vertical_flip=0.0,
-          convolutions=2,
+          learning_rate=1e-3,
+          batch_size=32,
+          horizontal_flip=0.5,
+          vertical_flip=0.5,
+          convolutions=3,
           plot=True,
           dataset_name='cell',
           unet_filters= 16):
 
-    get_data.generate_cell_data('cells')
+    print(f'Training on: {TRAIN_FOLDER}')
+    get_data.generate_cell_data(TRAIN_FOLDER)
 
     """Train chosen model on selected dataset."""
     # use GPU if avilable
@@ -80,10 +83,12 @@ def train(network_architecture='UNet',
                           validation=True)
 
     # current best results (lowest mean absolute error on validation set)
-    current_best = np.infty
+    current_best = np.inf
     res_diff = []
+    best_epoch = 0
     epoch = 0
-    while epoch < 10 or misc.avg(res_diff[-10:]) != res_diff[-1:] or misc.abs(misc.avg(res_diff[-10:])-misc.avg(res_diff[-11:-1])) > RESULT_THRESHOLD:
+    print("\n", "-" * 80, "\n", sep='')  
+    while epoch < 20 or (epoch+1-best_epoch < PLATEAU_THRESHOLD and misc.abs(misc.avg(res_diff[-10:])-misc.avg(res_diff[-11:-1])) > RESULT_THRESHOLD):
         print(f"Epoch {epoch + 1}\n")
         # run training epoch and update learning rate
         train_looper.run()
@@ -92,25 +97,32 @@ def train(network_architecture='UNet',
         # run validation epoch
         with torch.no_grad():
             result = valid_looper.run()
+            res_diff.append(result)
 
-
+        
         # update checkpoint if new best is reached
         if misc.abs(result) < current_best:
             current_best = misc.abs(result)
-            res_diff.append(current_best)
-            torch.save(network.state_dict(),
-                       f'{dataset_name}_{network_architecture}.pth')
 
-            print(f"\nNew best result: {result}")
+            print(f"\n!!!New best result!!!")
+            best_epoch = epoch + 1
 
-
-            print()
-            print(f'Avg diff: {misc.abs(misc.avg(res_diff[-10:])-misc.avg(res_diff[-11:-1]))} - limit: {RESULT_THRESHOLD}')
-        print("\n", "-" * 80, "\n", sep='')
+        print(f'\nCurrent result: {result} - Best result: {current_best} - Best epoch: {best_epoch}')
+        print(f'Result deviation from avg(10): {misc.abs(misc.avg(res_diff[-10:])-misc.avg(res_diff[-11:-1]))} - limit: {RESULT_THRESHOLD}') 
+        print("\n", "-" * 80, "\n", sep='')        
         epoch += 1
 
-    print(f"[Training done] Best result: {current_best}")
+    
+    pthname = TRAIN_FOLDER.split('/')[len(TRAIN_FOLDER.split('/'))-2]
+    pthpath = TRAIN_FOLDER.split(pthname)[0]
+    torch.save(network.state_dict(), f'{pthpath}/{pthname}_cntrmodel_{current_best}_{best_epoch}.pth')
+    print(f'{pthpath}/{pthname}_cntrmodel_{current_best}_{best_epoch}.pth')
+    if epoch+1-best_epoch >= PLATEAU_THRESHOLD:
+        print(f"[Training done - No new best result in {PLATEAU_THRESHOLD} epochs] Best result: {current_best}")
+    else:
+        print(f"[Training done - Plateau reached] Best result: {current_best}")
 
 
 if __name__ == '__main__':
-    train()
+    for x in range(5):
+        train()

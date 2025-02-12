@@ -28,9 +28,10 @@ from model import UNet, FCRN_A
 
 
 def infer(
-        image_path='C:\\Users\\Tomi\\PycharmProjects\\DCGAN\\mosaic\\mosaic_001\\img\\001_00039_01906_img.png', #801
+        image_path='samples/002_00001_00213_img.png', #801
         network_architecture='UNet',
-        checkpoint='cell_UNet.pth',
+        checkpoint='../mosaic/mosaic_002_cntrmodel_7.721615964199631_22.pth',
+>>>>>>> d0eb430 (counting network updated)
         convolutions=2,
         one_channel=False,
         pad=False,
@@ -54,7 +55,7 @@ def infer(
     # load provided state dictionary
     # note: by default train.py saves the model in data parallel mode
     network = torch.nn.DataParallel(network)
-    network.load_state_dict(torch.load(checkpoint))
+    network.load_state_dict(torch.load(checkpoint,weights_only=True))
     network.eval()
 
     img = Image.open(image_path)
@@ -98,7 +99,7 @@ def _visualize(img, dmap):
 
 
 if __name__ == "__main__":
-    dir = 'irl'
+    dir = 'samples'
     for filename in os.listdir(dir):
         if 'img' in filename:
             print(f'{filename} -> {infer(image_path=dir+ "/" + filename, visualize=False)}')
